@@ -12,6 +12,8 @@ from sklearn.metrics import (confusion_matrix, ConfusionMatrixDisplay,
                              precision_score, recall_score, f1_score, roc_auc_score)
 from sklearn.feature_selection import RFECV
 from sklearn.feature_selection import RFE
+from sklearn.neighbors import LocalOutlierFactor
+from sklearn.decomposition import PCA
 from sklearn.model_selection import cross_val_score
 from sklearn.cluster import Birch, AgglomerativeClustering
 from sklearn.metrics import silhouette_score
@@ -237,6 +239,58 @@ y_val_one_hot = pd.get_dummies(y_val).values
 val_auc = roc_auc_score(y_val_one_hot, y_val_pred, multi_class='ovr')
 print(f'Validation AUC: {val_auc:.2f}')
 
+
+
+X_scaled = data.select_dtypes(include=[np.number]) 
+
+n_neighbors = 20
+
+thresholds = [-1.5, -1.4, -1.3, -1.2]
+
+results = []
+
+lof = LocalOutlierFactor(n_neighbors=n_neighbors)
+
+y_pred = lof.fit_predict(X_scaled)
+
+lof_scores = lof.negative_outlier_factor_
+
+for threshold in thresholds:
+    outlier_mask = lof_scores < threshold
+    outlier_count = np.sum(outlier_mask)
+    results.append({
+        'threshold': threshold,
+        'outlier_count': outlier_count
+    })
+
+results_df = pd.DataFrame(results)
+print(results_df)
+selected_threshold = -1.23
+
+data['prediction'] = y_pred  
+data['lof_scores'] = lof_scores
+
+data['outlier'] = lof_scores < selected_threshold
+
+normal_data = data[~data['outlier']]
+
+plt.figure(figsize=(10, 6))
+
+plt.rcParams['font.family'] = 'Times New Roman'
+
+
+plt.hist(lof_scores, bins=50, edgecolor='k', color='skyblue', alpha=0.7)
+
+plt.title('Distribution of LOF Decision Function Scores', fontsize=16)
+plt.xlabel('Local Outlier Factor (LOF)', fontsize=14)
+plt.ylabel('Number of Samples', fontsize=14)
+
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+
+plt.savefig('lof_distribution.png', dpi=300, bbox_inches='tight')
+
+plt.tight_layout() 
+plt.show()
 K = 100 
 background_data = shap.kmeans(X_train.reshape(X_train.shape[0], X_train.shape[1]), K)
 
@@ -264,6 +318,3 @@ shap.summary_plot(shap_values_class_2, X_test.reshape(X_test.shape[0], X_test.sh
 fig_all_samples = shap.summary_plot(shap_values, X_test.reshape(X_test.shape[0], X_test.shape[1]),  show=False)
 plt.savefig("shap_summary_all_samples.png", dpi=300, bbox_inches='tight')
 plt.close()
-
-
-
