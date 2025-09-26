@@ -10,8 +10,52 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import (confusion_matrix, ConfusionMatrixDisplay,
                              classification_report, accuracy_score,
                              precision_score, recall_score, f1_score, roc_auc_score)
+from sklearn.feature_selection import RFECV
+from sklearn.feature_selection import RFE
+from sklearn.model_selection import cross_val_score
 import shap
 import seaborn as sns
+from scipy.stats import pearsonr
+from sklearn.feature_selection import VarianceThreshold
+from sklearn.datasets import load_breast_cancer
+from sklearn.ensemble import RandomForestClassifier
+import warnings
+warnings.filterwarnings("ignore")
+import os
+
+data = pd.read_excel(file_path, header=None)
+
+data_cleaned = data.loc[:, (data != 0).any(axis=0)]
+
+X = data.iloc[:,0:]
+
+selector = VarianceThreshold(threshold=0.01)
+X_new = selector.fit_transform(X)
+
+# Extract the relevant data for the model
+X = data.iloc[:, 1:-1]  # Features (from column B to BCO, rows 2 to 19)
+y = data.iloc[:, -1]    # Target (column BCP, rows 2 to 1+9)
+model = RandomForestClassifier(random_state=0)
+model.fit(X, y)
+
+
+selector = RFECV(model, step=200, cv=10, n_jobs=-1)     
+selector = selector.fit(X, y)
+X_wrapper = selector.transform(X)         
+score =cross_val_score(model , X_wrapper, y, cv=10,n_jobs=-1).mean()   
+print(score)
+print(selector.support_)                                
+print(selector.n_features_)                       
+print(selector.ranking_)                                
+from sklearn.linear_model import Lasso
+from sklearn.feature_selection import SelectFromModel
+
+lasso = Lasso(alpha=0.1)  
+selector = SelectFromModel(lasso)
+selector.fit(X, y)
+
+selected_features = X.columns[selector.get_support()]
+print( selected_features) 
 
 
 seed_value = 42
@@ -175,4 +219,5 @@ shap.summary_plot(shap_values_class_2, X_test.reshape(X_test.shape[0], X_test.sh
 fig_all_samples = shap.summary_plot(shap_values, X_test.reshape(X_test.shape[0], X_test.shape[1]),  show=False)
 plt.savefig("shap_summary_all_samples.png", dpi=300, bbox_inches='tight')
 plt.close()
+
 
