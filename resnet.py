@@ -13,6 +13,8 @@ from sklearn.metrics import (confusion_matrix, ConfusionMatrixDisplay,
 from sklearn.feature_selection import RFECV
 from sklearn.feature_selection import RFE
 from sklearn.model_selection import cross_val_score
+from sklearn.cluster import Birch, AgglomerativeClustering
+from sklearn.metrics import silhouette_score
 import shap
 import seaborn as sns
 from scipy.stats import pearsonr
@@ -22,6 +24,49 @@ from sklearn.ensemble import RandomForestClassifier
 import warnings
 warnings.filterwarnings("ignore")
 import os
+
+data = pd.read_excel("LCM-PBT.xlsx")
+X = data.iloc[:, 1:-1].values  
+
+
+threshold = 0.07
+birch = Birch(threshold=threshold, branching_factor=30, n_clusters=None)
+birch.fit(X)
+subcluster_centers = birch.subcluster_centers_
+n_subclusters = len(subcluster_centers)
+print(f" {n_subclusters}")
+
+best_score = -1
+best_n = 2
+best_labels = None
+linkage_options = ['ward', 'complete', 'average']
+
+for linkage in linkage_options:
+    for n_clusters in range(2, min(11, n_subclusters+1)):
+        agglo = AgglomerativeClustering(n_clusters=n_clusters, linkage=linkage)
+        labels_temp = agglo.fit_predict(subcluster_centers)
+        score = silhouette_score(subcluster_centers, labels_temp)
+        if score > best_score:
+            best_score = score
+            best_n = n_clusters
+            best_labels = labels_temp
+            best_linkage = linkage
+
+print(f" {best_n}, linkage={best_linkage}, silhouette={best_score:.3f}")
+
+first_level_labels = birch.predict(X)
+final_labels = np.zeros(X.shape[0], dtype=int)
+for i in range(len(X)):
+    sub_idx = first_level_labels[i]
+    final_labels[i] = best_labels[sub_idx]
+
+plt.figure(figsize=(6,5))
+plt.scatter(X[:,0], X[:,1], c=final_labels, cmap='viridis', s=50)
+plt.title('Two-Step Clustering (SPSS-like)')
+plt.xlabel('Feature 1')
+plt.ylabel('Feature 2')
+plt.colorbar(label='Cluster Label')
+plt.show()
 
 data = pd.read_excel(file_path, header=None)
 
@@ -219,5 +264,6 @@ shap.summary_plot(shap_values_class_2, X_test.reshape(X_test.shape[0], X_test.sh
 fig_all_samples = shap.summary_plot(shap_values, X_test.reshape(X_test.shape[0], X_test.shape[1]),  show=False)
 plt.savefig("shap_summary_all_samples.png", dpi=300, bbox_inches='tight')
 plt.close()
+
 
 
